@@ -4,7 +4,7 @@ package object lancegatlin {
   implicit object Printable_Int extends SimplePrintable[Int]
   implicit object Printable_Double extends SimplePrintable[Double]
   implicit val Printable_String = new Printable[String] {
-    override def print(a: String): String = a
+    override def print(a: String): String = s""""$a""""
   }
   implicit def mkPrintable_Option[A](implicit pA:Printable[A]) = new Printable[Option[A]] {
     override def print(oa: Option[A]): String = oa match {
