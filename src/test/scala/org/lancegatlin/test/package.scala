@@ -6,7 +6,4 @@ package object test {
     bPrintable:Printable[B],
     cPrintable:Printable[C]
   ) = Macro.printable[(A,B,C)]
-//  new Printable[(A,B,C)] {
-//    override def print(a: (A,B,C)): String = "here"
-//  }
 }
