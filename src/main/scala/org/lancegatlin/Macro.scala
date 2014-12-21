@@ -26,16 +26,19 @@ object Macro {
     import c.universe._
     
     def build[A: c.WeakTypeTag] : c.Expr[Printable[A]] = {
-      def fmtTypeName(aType:c.Type) : String = {
-        if(isTupleType(aType)) {
+      val aType = c.weakTypeOf[A]
+      val isTuple = isTupleType(aType)
+
+      val typeName = {
+        if(isTuple) {
           ""
         } else {
           aType.typeSymbol.name.toString
         }
       }
 
-      def fmtSymbol(aType:c.Type,optSymbol:Option[c.Symbol]) : String = {
-        if(isTupleType(aType)) {
+      def fmtSymbol(optSymbol:Option[c.Symbol]) : String = {
+        if(isTuple) {
           ""
         } else {
           optSymbol.fold("")(_.name.toString + "=")
@@ -43,8 +46,7 @@ object Macro {
       }
 
       val printableTypeConstructor = typeOf[Printable[_]].typeConstructor
-      val aType = c.weakTypeOf[A]
-  
+
       val structType = calcStructType(aType)
   
       val body =
@@ -54,8 +56,8 @@ object Macro {
           val innerPrintable = inferImplicitOrDie(innerPrintableType)
           q"""
 val v = ${aType.typeSymbol.companion}.unapply(a).get
-${fmtTypeName(aType)} + "(" +
-${fmtSymbol(aType,optSymbol)} + $innerPrintable.print(v) +
+$typeName + "(" +
+${fmtSymbol(optSymbol)} + $innerPrintable.print(v) +
 ")"
           """
         } else {
@@ -65,11 +67,11 @@ ${fmtSymbol(aType,optSymbol)} + $innerPrintable.print(v) +
               .map { case ((optSymbol, _type), i) =>
                 val innerPrintableType = appliedType(printableTypeConstructor, List(_type))
                 val innerPrintable = inferImplicitOrDie(innerPrintableType)
-                q"""${fmtSymbol(aType,optSymbol)} + $innerPrintable.print(tuple.${TermName("_" + (i+1))})"""
+                q"""${fmtSymbol(optSymbol)} + $innerPrintable.print(tuple.${TermName("_" + (i+1))})"""
               }
           q"""
 val tuple = ${aType.typeSymbol.companion}.unapply(a).get
-${fmtTypeName(aType)} + "(" +
+$typeName + "(" +
 Seq(..$values).mkString(",") +
 ")"
           """
@@ -135,9 +137,10 @@ Seq(..$values).mkString(",") +
 
     /**
      * A case class that represents the struct type for some type. A struct type
-     * contains a list of the (Symbol,Type) pairs that represent the data
-     * necessary to both create an instance of the type (apply) and capture the 
-     * data returned when an instance of the type is decomposed (unapply).
+     * contains a list of the (Symbol,Type) pairs that represent the data types
+     * (or struct types) necessary to both create an instance of the type
+     * (apply) and capture the data returned when an instance of the type is
+     * decomposed (unapply).
      * @param oomMember one or more (Symbol,Type) pairs
      */
     case class StructType(oomMember: List[(Option[c.Symbol], c.Type)]) {
@@ -151,7 +154,7 @@ Seq(..$values).mkString(",") +
 
       /**
        * Test if two struct match. Two struct types match if their member types
-       * match.
+       * correspond exactly.
        * @param other other struct type to test
        * @return TRUE if struct types match
        */
@@ -166,15 +169,14 @@ Seq(..$values).mkString(",") +
      * For case classes, the struct type is the list of (field name, field type)
      * pairs of the case class.
      * For tuples, the struct type is the (incremental tuple field name ("_1",
-     * "_2", etc), field type) pairs.
-     * For other types, the struct type equals the first unapply/apply
-     * method pair with matching struct types in the type's companion object.
-     * Symbol names and types are extracted from the matching apply method 
-     * arguments.
+     * "_2", etc), field type) pairs of the tuple.
+     * For other types, the struct type equals the first unapply/apply method
+     * pair  in the type's companion object with matching struct types.
      *
      * @param aType type whose companion object should be searched for apply and
      *              unapply methods
-     * @return the struct type as a non-empty list of (Symbol,Type) pairs
+     * @return the struct type that contains a non-empty member list of
+     *         (Symbol,Type) pairs
      */
     def calcStructType(
       aType: c.Type
